@@ -6,6 +6,8 @@
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <SD.h>
+#include <LowPower.h>
+#include <Adafruit_MLX90614.h>
 
 // No other Address options.
 #define DEF_ADDR 0x55
@@ -15,23 +17,26 @@
 // Reset pin, MFIO pin
 const int resPin = 2;
 const int mfioPin = 3;
-const unsigned long interval = 5000; // Change every 12 hours (12UL60UL60UL*1000UL)
-unsigned long previousMillis = 0; // will store last time updated
+int loops = 10;
+int postpone = 50;
+const unsigned long interval = 100000; // Change every 12 hours (12UL60UL60UL*1000UL)
+unsigned long previousMillis = 100000; // will store last time updated
 
 
 // Takes address, reset pin, and MFIO pin.
 SparkFun_Bio_Sensor_Hub bioHub(resPin, mfioPin); 
-
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 bioData body; 
 
 File myFile;
  
-SoftwareSerial blueToothSerial(RxD,TxD);
+//SoftwareSerial blueToothSerial(RxD,TxD);
  
 void setup() 
 { 
-  Serial.begin(115200);
+  Serial.begin(9600);
 
+  mlx.begin();
   //intialization sd shield
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
@@ -64,23 +69,27 @@ void setup()
     Serial.println(error); 
   }
   
-  pinMode(RxD, INPUT);
-  pinMode(TxD, OUTPUT);
-  setupBlueToothConnection();
+  //pinMode(RxD, INPUT);
+  //pinMode(TxD, OUTPUT);
+  //setupBlueToothConnection();
   
    
 }
 
 
-void write_to_sd()
+void write_to_sd(DynamicJsonDocument root)
 {
-  myFile = SD.open("test3.txt", FILE_WRITE);
+  serializeJson(root, Serial);        
+  Serial.println();
+  /*myFile = SD.open("test3.txt", FILE_WRITE);
   body = bioHub.readBpm();
   DynamicJsonDocument root(128);
   root["data"] = true;
   root["sensor"] = "Oxygen";
   root["heartRate"] = body.heartRate;
-  root["oxygen"] = body.oxygen; 
+  root["oxygen"] = body.oxygen;
+  root["tempObject"] = mlx.readObjectTempC();
+  root["tempAmbient"] = mlx.readAmbientTempC();
   
   if (myFile) {
     Serial.print("Writing to test3.txt...");
@@ -93,7 +102,7 @@ void write_to_sd()
     // if the file didn't open, print an error:
     Serial.println("error opening test3.txt");
   }
-  delay(100);
+  delay(100);*/
   
 }
 
@@ -106,8 +115,8 @@ void read_sd()
     // read from the file until there's nothing else in it:
     while (myFile.available()) {
       char letter = myFile.read();
-      //Serial.print(letter);
-      blueToothSerial.print(letter);
+      Serial.print(letter);
+      //blueToothSerial.print(letter);
       //delay(10);
     }
     // close the file:
@@ -117,50 +126,62 @@ void read_sd()
     Serial.println("error opening test3.txt");
   }
   delay(1000);
-
-
-
 }
 
 
-void test_write(){
-  myFile = SD.open("test3.txt", FILE_WRITE);
+void measure(){
+  DynamicJsonDocument root(128);
+  root["data"] = true;
+  root["sensor"] = "Temperature";
+  root["tempObject"] = getObjTemperature();
+  root["tempAmbient"] = getAmbTemperature();
+  //delay(1000);
+  body = bioHub.readBpm();
+  root["heartRate"] = body.heartRate;
+  root["oxygen"] = body.oxygen;
+
+  write_to_sd(root);
   
-  if (myFile) {
-    Serial.print("Writing to test3.txt...");
-    myFile.println("pam pam pam");
-    // close the file:
-    myFile.close();
-    Serial.println("done.");
-  } else {
-    // if the file didn't open, print an error:
-    Serial.println("error opening test3.txt");
+}
+
+
+float getAmbTemperature(){
+  float sum = 0;
+  for(int j = 0; j < loops; j++){
+    float temp = mlx.readAmbientTempC();
+    if(temp < 1000 && temp > - 100)
+      sum += temp;
+    else
+      j--;  
+    delay(postpone);
   }
-
-
+  sum = sum/loops;
   
+  return (float(round(sum*100)) / 100);
+}
+
+float getObjTemperature(){
+  float sum = 0;
+  for(int j = 0; j < loops; j++){
+    float temp = mlx.readObjectTempC();
+    if(temp < 1000 && temp > -50)
+      sum += temp;
+    else
+      j--;  
+    delay(postpone);
+  }
+  sum = sum/loops;
+  return (float(round(sum*100)) / 100);
 }
 
 void loop() 
 { 
-  unsigned long currentMillis = millis();
   
-  Serial.println(currentMillis); 
-  Serial.println(previousMillis);
-  Serial.println(currentMillis - previousMillis);   
-  if ((currentMillis >= previousMillis) && (currentMillis - previousMillis >= interval)){
-    Serial.println("timer triggered");
-    read_sd();
-    previousMillis += interval;
-  }
-
-  //write_to_sd();
-  delay(1000);
-  
+  measure();
 
 } 
 
-void setupBlueToothConnection()
+/*void setupBlueToothConnection()
 {
   blueToothSerial.begin(38400); //Set BluetoothBee BaudRate to default baud rate 38400
   blueToothSerial.print("\r\n+STWMOD=0\r\n"); //set the bluetooth work in slave mode
@@ -173,4 +194,4 @@ void setupBlueToothConnection()
   Serial.println("The slave bluetooth is inquirable!");
   delay(2000); // This delay is required.
   blueToothSerial.flush();
-}
+}*/

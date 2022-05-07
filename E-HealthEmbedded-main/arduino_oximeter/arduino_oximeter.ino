@@ -155,7 +155,7 @@ void getData(){
     if(body.heartRate == 0 || body.oxygen == 0 || body.confidence < 60){
       Serial.println("Unsuccessful measurement");
       }else{
-          DynamicJsonDocument root(128);
+          DynamicJsonDocument root(256);
           root["data"] = true;
           root["sensor"] = "Oxygen";
           root["heartRate"] = body.heartRate;

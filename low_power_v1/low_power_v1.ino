@@ -25,12 +25,12 @@ unsigned long prevMillis = 0;
 unsigned long actMillis = 0;
 
 unsigned long interval_sleep = 2000;
-int iterator = 2000;
+//int iterator = 2000;
 
-//bool treshHold = false;
-//byte holdBpm = 120;
-//byte holdOxy = 90;
-//float holdTmp = 37.5;
+bool treshHold = false;
+byte holdBpm = 120;
+byte holdOxy = 90;
+float holdTmp = 37.5;
 
 String configData = "";
 
@@ -98,7 +98,6 @@ void init_oxi(){
 
 void measure_and_write()
 {
-  delay(1000);
   myFile = SD.open(myFileName, FILE_WRITE);
   body = bioHub.readBpm();
 
@@ -108,12 +107,15 @@ void measure_and_write()
   root["heartRate"] = body.heartRate;
   root["o"] = body.oxygen; 
 
-  /*if(root["tempObject"] <= holdTmp){
+  if(root["tempObject"] >= holdTmp){
     Serial.println(F("Sending BC treshold triggered"));
     serializeJson(root, blueToothSerial);
     blueToothSerial.println();
     treshHold = true;
-  }*/
+    myFile.close();
+    root.clear();
+    return;
+  }
   if(myFile) {
     Serial.println(F("Writing to file"));
     //Serial.print("Writing to test3.txt...");
@@ -122,7 +124,7 @@ void measure_and_write()
     // close the file:
     myFile.close();
     root.clear();
-    //treshHold = false;
+    treshHold = false;
     //Serial.println("done.");
   } else {
     // if the file didn't open, print an error:
@@ -187,9 +189,9 @@ void power_sleep(long time_to_sleep){
   Serial.println(F("Go for a nap"));
   while(time_to_sleep > 0)
   { 
-      if(time_to_sleep > iterator) 
+      if(time_to_sleep > 2000) 
       { 
-          time_to_sleep -= iterator; 
+          time_to_sleep -= 2000; 
           LowPower.powerDown(SLEEP_2S, ADC_OFF, BOD_OFF); 
       } 
       else 
@@ -213,18 +215,18 @@ void processConfig(){
     return;
   }
   
-  //holdBpm = doc["bpm"];
- // holdTmp = doc["tmp"];
-  //holdOxy = doc["oxy"];
+  holdBpm = doc["bpm"];
+  holdTmp = doc["tmp"];
+  holdOxy = doc["oxy"];
   interval = doc["snd"];
   interval_sleep = doc["mea"];
   
-  if(interval_sleep > 8000){
+  /*if(interval_sleep > 8000){
     iterator = 8000;
   }
   else{
     iterator = interval_sleep;
-  }
+  }*/
   doc.clear();
   //Serial.println(interval);
   config = true;
@@ -240,10 +242,15 @@ void loop()
       read_sd();
       prevMillis += interval;
     }
-    //Serial.println(millis());
-    actMillis += interval_sleep;
-    //power_sleep(interval_sleep);
-    //Serial.println(F("Wake up"));
+    if(!treshHold){
+      actMillis += interval_sleep;
+      power_sleep(interval_sleep);
+      Serial.println(F("Wake up"));
+    }
+    else{
+      LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
+    }
+
   }
   while(blueToothSerial.available() && !config){
      recvChar = blueToothSerial.read();

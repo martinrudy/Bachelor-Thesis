@@ -17,8 +17,9 @@
 // Reset pin, MFIO pin
 #define resPin 2
 #define mfioPin 3
-#define myFileName "testik.txt"
+#define myFileName "tes.txt"
 
+bool config = false;
 unsigned long interval = 10000; // Change every 12 hours (12UL60UL60UL*1000UL)
 unsigned long prevMillis = 0;
 unsigned long actMillis = 0;
@@ -26,6 +27,12 @@ unsigned long actMillis = 0;
 unsigned long interval_sleep = 2000;
 int iterator = 2000;
 
+//bool treshHold = false;
+//byte holdBpm = 120;
+//byte holdOxy = 90;
+//float holdTmp = 37.5;
+
+String configData = "";
 
 File myFile;
 // Takes address, reset pin, and MFIO pin.
@@ -91,26 +98,35 @@ void init_oxi(){
 
 void measure_and_write()
 {
+  delay(1000);
   myFile = SD.open(myFileName, FILE_WRITE);
   body = bioHub.readBpm();
 
-  StaticJsonDocument<64> root;
+  StaticJsonDocument<32> root;
   root["tempObject"] = getObjTemperature();
   root["tempAmbient"] = getAmbTemperature();
   root["heartRate"] = body.heartRate;
   root["o"] = body.oxygen; 
-  
-  if (myFile) {
+
+  /*if(root["tempObject"] <= holdTmp){
+    Serial.println(F("Sending BC treshold triggered"));
+    serializeJson(root, blueToothSerial);
+    blueToothSerial.println();
+    treshHold = true;
+  }*/
+  if(myFile) {
+    Serial.println(F("Writing to file"));
     //Serial.print("Writing to test3.txt...");
     serializeJson(root, myFile);
     myFile.println();
     // close the file:
     myFile.close();
     root.clear();
+    //treshHold = false;
     //Serial.println("done.");
   } else {
     // if the file didn't open, print an error:
-    //Serial.println("error opening test3.txt");
+    Serial.println(F("error opening File"));
   }
   
 }
@@ -119,13 +135,13 @@ void read_sd()
 {
   myFile = SD.open(myFileName);
   if (myFile) {
-    //Serial.println(myFileName);
+    Serial.println(F("Reading sd"));
 
     // read from the file until there's nothing else in it:
     while (myFile.available()) {
       char letter = myFile.read();
-      Serial.print(letter);
-      //blueToothSerial.print(letter);
+      //Serial.print(letter);
+      blueToothSerial.print(letter);
       delay(10);
     }
     // close the file:
@@ -134,7 +150,7 @@ void read_sd()
     SD.remove(myFileName);
   } else {
     // if the file didn't open, print an error:
-    //Serial.println("error opening file");
+    Serial.println(F("error opening file"));
   }
   delay(1000);
 }
@@ -142,7 +158,7 @@ void read_sd()
 
 float getAmbTemperature(){
   float sum = 0;
-  for(int j = 0; j < 10; j++){
+  for(byte j = 0; j < 10; j++){
     float temp = mlx.readAmbientTempC();
     if(temp < 1000 && temp > - 100)
       sum += temp;
@@ -156,7 +172,7 @@ float getAmbTemperature(){
 
 float getObjTemperature(){
   float sum = 0;
-  for(int j = 0; j < 10; j++){
+  for(byte j = 0; j < 10; j++){
     float temp = mlx.readObjectTempC();
     if(temp < 1000 && temp > -50)
       sum += temp;
@@ -168,6 +184,7 @@ float getObjTemperature(){
 }
 
 void power_sleep(long time_to_sleep){
+  Serial.println(F("Go for a nap"));
   while(time_to_sleep > 0)
   { 
       if(time_to_sleep > iterator) 
@@ -184,20 +201,64 @@ void power_sleep(long time_to_sleep){
   
 }
 
+
+void processConfig(){
+  DynamicJsonDocument doc(90);
+  //Serial.println(configData);
+  DeserializationError error = deserializeJson(doc, configData);
+  if(error) {
+    //Serial.println("deserializeJson() failed: ");
+    Serial.println(F("error"));
+    Serial.println(error.f_str());
+    return;
+  }
+  
+  //holdBpm = doc["bpm"];
+ // holdTmp = doc["tmp"];
+  //holdOxy = doc["oxy"];
+  interval = doc["snd"];
+  interval_sleep = doc["mea"];
+  
+  if(interval_sleep > 8000){
+    iterator = 8000;
+  }
+  else{
+    iterator = interval_sleep;
+  }
+  doc.clear();
+  //Serial.println(interval);
+  config = true;
+}
+
+
 void loop() 
 { 
-  Serial.println(prevMillis);
-  Serial.println(actMillis);
-  Serial.println(interval);
-  measure_and_write();
-  if(actMillis - prevMillis >= interval){
-    read_sd();
-    prevMillis += interval;
+  char recvChar;
+  if(config){
+    measure_and_write();
+    if(actMillis - prevMillis >= interval){
+      read_sd();
+      prevMillis += interval;
+    }
+    //Serial.println(millis());
+    actMillis += interval_sleep;
+    //power_sleep(interval_sleep);
+    //Serial.println(F("Wake up"));
   }
-  Serial.println(millis());
-  //actMillis += millis();
-  actMillis += interval_sleep;
-  power_sleep(interval_sleep);
+  while(blueToothSerial.available() && !config){
+     recvChar = blueToothSerial.read();
+     if(recvChar == '{'){
+        config = false;
+        configData = "";
+     }
+     else if(recvChar == '}'){
+        configData.concat(recvChar);        
+        processConfig();     
+        configData = "";
+     }
+     configData.concat(recvChar);
+  }
+  
 
 } 
 

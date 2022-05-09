@@ -163,7 +163,7 @@ void setupBlueToothConnection()
   // zdroj: https://rlx.sk/sk/bluetooth/3577-arduino-bluetooth-shield-masterslave-er-mcs01108s-v20edr-3mbps-24ghz-.html
   
   blueToothSerial.begin(38400); //Set BluetoothBee BaudRate to default baud rate 38400
-  blueToothSerial.print("\r\n+STWMOD=0\r\n"); //set the bluetooth work in slave mode
+  /*blueToothSerial.print("\r\n+STWMOD=0\r\n"); //set the bluetooth work in slave mode
   blueToothSerial.print("\r\n+STNA=tepelnySenzor\r\n"); //set the bluetooth name as "tepelnySenzor"
   blueToothSerial.print("\r\n+STPIN=0000\r\n");//Set SLAVE pincode"0000"
   blueToothSerial.print("\r\n+STOAUT=1\r\n"); // Permit Paired device to connect me
@@ -172,6 +172,6 @@ void setupBlueToothConnection()
   blueToothSerial.print("\r\n+INQ=1\r\n"); //make the slave bluetooth inquirable 
   Serial.println("The slave bluetooth is inquirable!");
   delay(2000); // This delay is required.
-  blueToothSerial.flush();
+  blueToothSerial.flush();*/
 
 }
